@@ -5655,35 +5655,53 @@ class nakagami_gen(rv_continuous):
 
     .. math::
 
-        f(x, \nu) = \frac{2 \nu^\nu}{\Gamma(\nu)} x^{2\nu-1} \exp(-\nu x^2)
+        f(x, \nu, \Omega) = \frac{2 \nu^\nu}{\Gamma(\nu) \Omega^\nu} x^{2\nu-1} \exp(-\frac{\nu}{\Omega} x^2)
 
-    for :math:`x >= 0`, :math:`\nu > 0`.
+    for :math:`x >= 0`, :math:`\nu > 0`, :math:`\Omega > 0`.
 
-    `nakagami` takes ``nu`` as a shape parameter for :math:`\nu`.
+    `nakagami` takes ``nu`` as a shape parameter for :math:`\nu` and ``omega`` as a scale parameter for :math:`\Omega`.
 
     %(after_notes)s
 
     %(example)s
 
     """
-    def _pdf(self, x, nu):
+
+    def _logpdf(self, x, nu, omega=1):
+        eps = 10e-8
+        log_value = (
+                nu * np.log(nu + eps)
+                + np.log(2)
+                - np.log(gamma(nu))
+                - nu * np.log(omega + eps)
+                + (2 * nu - 1) * np.log(x + eps)
+                - nu * x ** 2 / (omega + eps)
+        )
+        return log_value
+
+    def _pdf(self, x, nu, omega=1):
         # nakagami.pdf(x, nu) = 2 * nu**nu / gamma(nu) *
         #                       x**(2*nu-1) * exp(-nu*x**2)
-        return 2*nu**nu/sc.gamma(nu)*(x**(2*nu-1.0))*np.exp(-nu*x*x)
+        # return 2*nu**nu/sc.gamma(nu)*(x**(2*nu-1.0))*np.exp(-nu*x*x)
+        return np.exp(self._logpdf(x, nu, omega))
 
-    def _cdf(self, x, nu):
-        return sc.gammainc(nu, nu*x*x)
+    def _cdf(self, x, nu, omega=1):
+        return x * 0 if x < 0 else sc.gammainc(nu, nu / omega * x ** 2)
 
-    def _ppf(self, q, nu):
-        return np.sqrt(1.0/nu*sc.gammaincinv(nu, q))
+    def _ppf(self, q, nu, omega=1):
+        return np.sqrt(omega / nu * sc.gammaincinv(nu, q))
 
-    def _stats(self, nu):
-        mu = sc.gamma(nu+0.5)/sc.gamma(nu)/np.sqrt(nu)
-        mu2 = 1.0-mu*mu
+    def _stats(self, nu, omega=1):
+        # TODO: adapt
+        mu = sc.gamma(nu+0.5)/sc.gamma(nu)/np.sqrt(omega/nu)
+        mu2 = omega * (1.0-mu*mu)
         g1 = mu * (1 - 4*nu*mu2) / 2.0 / nu / np.power(mu2, 1.5)
         g2 = -6*mu**4*nu + (8*nu-2)*mu**2-2*nu + 1
         g2 /= nu*mu2**2.0
         return mu, mu2, g1, g2
+
+    def rvs(self, nu, omega=1, size=1):
+        return np.sqrt(np.random.gamma(nu, omega / nu, size=size))
 
 
 nakagami = nakagami_gen(a=0.0, name="nakagami")
